@@ -6,7 +6,7 @@ import {
 } from "./emailTemplates.js";
 
 const sendVerificationEmail = async (email, token) => {
-  const verificationLink = `http://localhost:5174/email-verification/${token}`;
+  const verificationLink = `${process.env.CORS_ORIGIN}/email-verification/${token}`;
 
   try {
     const response = await transporter.sendMail({
@@ -31,7 +31,7 @@ const sendVerificationEmail = async (email, token) => {
 };
 
 const sendRestPasswordEmail = async (email, token) => {
-  const resetPasswordLink = `http://localhost:5174/reset-password/${token}`;
+  const resetPasswordLink = `${process.env.CORS_ORIGIN}/reset-password/${token}`;
   try {
     const response = await transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -68,4 +68,4 @@ const sendSuccessResetPasswordEmail = async (email) => {
   }
 };
 
-export { sendVerificationEmail, sendRestPasswordEmail,sendSuccessResetPasswordEmail };
+export { sendVerificationEmail, sendRestPasswordEmail, sendSuccessResetPasswordEmail };
