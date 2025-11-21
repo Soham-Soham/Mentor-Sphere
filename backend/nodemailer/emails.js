@@ -7,7 +7,8 @@ import {
 
 const sendVerificationEmail = async (email, token) => {
   const verificationLink = `${process.env.CORS_ORIGIN}/email-verification/${token}`;
-
+  console.log(verificationLink);
+  
   try {
     const response = await transporter.sendMail({
       from: process.env.EMAIL_USER,
