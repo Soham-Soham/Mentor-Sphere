@@ -101,6 +101,9 @@ const VideoRoom = () => {
                     peersRef.current = newPeers;
                     setPeers(newPeers);
                 });
+
+
+
             })
             .catch((err) => {
                 console.error("Error accessing media devices:", err);

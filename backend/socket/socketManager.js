@@ -40,6 +40,7 @@ export const socketManager = (io) => {
       });
     });
 
+
     // Handle offer
     socket.on("offer", ({ roomId, offer, from, to, name, avatar }) => {
       io.to(to).emit("offer", { offer, from, name, avatar });
