@@ -1,30 +1,32 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
-import SimplePeer from "simple-peer";
 import socket from "../socket/socket";
 import { Video, Mic, MicOff, VideoOff, User } from "lucide-react";
 
 const VideoRoom = () => {
-    const [peers, setPeers] = useState([]);
-    const [stream, setStream] = useState(null);
+    const [peers, setPeers] = useState({}); // { socketId: { stream, name, avatar, isAudioMuted, isVideoMuted } }
+    const [localStream, setLocalStream] = useState(null);
     const [isAudioMuted, setIsAudioMuted] = useState(false);
     const [isVideoMuted, setIsVideoMuted] = useState(false);
 
-    const userVideo = useRef();
-    const peersRef = useRef([]);
+    const localVideoRef = useRef();
+    const peerConnections = useRef({}); // { socketId: RTCPeerConnection }
+
     const { room } = useSelector((state) => state.room);
     const { user } = useSelector((state) => state.auth);
     const roomId = room?.roomId;
 
     useEffect(() => {
+        // Get user media
         navigator.mediaDevices
             .getUserMedia({ video: true, audio: true })
-            .then((currentStream) => {
-                setStream(currentStream);
-                if (userVideo.current) {
-                    userVideo.current.srcObject = currentStream;
+            .then((stream) => {
+                setLocalStream(stream);
+                if (localVideoRef.current) {
+                    localVideoRef.current.srcObject = stream;
                 }
 
+                // Join the room
                 socket.emit("join-video-room", {
                     roomId,
                     userId: user._id,
@@ -32,77 +34,118 @@ const VideoRoom = () => {
                     avatar: user.avatar
                 });
 
-                socket.on("user-joined", ({ socketId, name, avatar }) => {
-                    const peer = createPeer(socketId, socket.id, currentStream);
-                    const peerObj = {
-                        peerID: socketId,
-                        peer,
-                        name,
-                        avatar,
-                        isAudioMuted: false,
-                        isVideoMuted: false
-                    };
-                    peersRef.current.push(peerObj);
-                    setPeers((users) => [...users, peerObj]);
-                });
+                // --- Socket Event Listeners ---
 
-                socket.on("offer", ({ offer, from, name, avatar }) => {
-                    const peer = addPeer(offer, from, currentStream);
-                    const peerObj = {
-                        peerID: from,
-                        peer,
-                        name,
-                        avatar,
-                        isAudioMuted: false,
-                        isVideoMuted: false
-                    };
-                    peersRef.current.push(peerObj);
-                    setPeers((users) => [...users, peerObj]);
-                });
+                // 1. User Joined -> We (existing user) call them
+                socket.on("user-joined", async ({ socketId, name, avatar }) => {
+                    console.log("New user joined:", name, socketId);
 
-                socket.on("answer", ({ answer, from }) => {
-                    const item = peersRef.current.find((p) => p.peerID === from);
-                    if (item) {
-                        item.peer.signal(answer);
+                    // Initialize peer state for UI immediately (with no stream yet)
+                    setPeers(prev => ({
+                        ...prev,
+                        [socketId]: { stream: null, name, avatar, isAudioMuted: false, isVideoMuted: false }
+                    }));
+
+                    const pc = createPeerConnection(socketId, stream);
+                    peerConnections.current[socketId] = pc;
+
+                    try {
+                        const offer = await pc.createOffer();
+                        await pc.setLocalDescription(offer);
+
+                        socket.emit("offer", {
+                            roomId,
+                            offer,
+                            from: socket.id,
+                            to: socketId,
+                            name: user.name,   // Send our details
+                            avatar: user.avatar
+                        });
+                    } catch (err) {
+                        console.error("Error creating offer:", err);
                     }
                 });
 
-                socket.on("ice-candidate", ({ candidate, from }) => {
-                    const item = peersRef.current.find((p) => p.peerID === from);
-                    if (item) {
-                        item.peer.signal(candidate);
+                // 2. Receive Offer -> We (new user) answer
+                socket.on("offer", async ({ offer, from, name, avatar }) => {
+                    console.log("Received offer from:", name, from);
+
+                    // Initialize peer state
+                    setPeers(prev => ({
+                        ...prev,
+                        [from]: { stream: null, name, avatar, isAudioMuted: false, isVideoMuted: false }
+                    }));
+
+                    const pc = createPeerConnection(from, stream);
+                    peerConnections.current[from] = pc;
+
+                    try {
+                        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                        const answer = await pc.createAnswer();
+                        await pc.setLocalDescription(answer);
+
+                        socket.emit("answer", {
+                            roomId,
+                            answer,
+                            from: socket.id,
+                            to: from
+                        });
+                    } catch (err) {
+                        console.error("Error handling offer:", err);
                     }
                 });
 
-                socket.on("user-toggled-audio", ({ socketId, isMuted }) => {
-                    const updatedPeers = peersRef.current.map(p => {
-                        if (p.peerID === socketId) return { ...p, isAudioMuted: isMuted };
-                        return p;
+                // 3. Receive Answer
+                socket.on("answer", async ({ answer, from }) => {
+                    const pc = peerConnections.current[from];
+                    if (pc) {
+                        try {
+                            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+                        } catch (err) {
+                            console.error("Error setting remote description (answer):", err);
+                        }
+                    }
+                });
+
+                // 4. ICE Candidates
+                socket.on("ice-candidate", async ({ candidate, from }) => {
+                    const pc = peerConnections.current[from];
+                    if (pc && candidate) {
+                        try {
+                            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                        } catch (err) {
+                            console.error("Error adding ICE candidate:", err);
+                        }
+                    }
+                });
+
+                // 5. User Left
+                socket.on("user-left", ({ socketId }) => {
+                    if (peerConnections.current[socketId]) {
+                        peerConnections.current[socketId].close();
+                        delete peerConnections.current[socketId];
+                    }
+                    setPeers(prev => {
+                        const newPeers = { ...prev };
+                        delete newPeers[socketId];
+                        return newPeers;
                     });
-                    peersRef.current = updatedPeers;
-                    setPeers(updatedPeers);
+                });
+
+                // 6. Toggles
+                socket.on("user-toggled-audio", ({ socketId, isMuted }) => {
+                    setPeers(prev => ({
+                        ...prev,
+                        [socketId]: { ...prev[socketId], isAudioMuted: isMuted }
+                    }));
                 });
 
                 socket.on("user-toggled-video", ({ socketId, isVideoMuted }) => {
-                    const updatedPeers = peersRef.current.map(p => {
-                        if (p.peerID === socketId) return { ...p, isVideoMuted: isVideoMuted };
-                        return p;
-                    });
-                    peersRef.current = updatedPeers;
-                    setPeers(updatedPeers);
+                    setPeers(prev => ({
+                        ...prev,
+                        [socketId]: { ...prev[socketId], isVideoMuted: isVideoMuted }
+                    }));
                 });
-
-                socket.on("user-left", ({ socketId }) => {
-                    const peerObj = peersRef.current.find((p) => p.peerID === socketId);
-                    if (peerObj) {
-                        peerObj.peer.destroy();
-                    }
-                    const newPeers = peersRef.current.filter((p) => p.peerID !== socketId);
-                    peersRef.current = newPeers;
-                    setPeers(newPeers);
-                });
-
-
 
             })
             .catch((err) => {
@@ -110,6 +153,7 @@ const VideoRoom = () => {
             });
 
         return () => {
+            // Cleanup
             socket.off("user-joined");
             socket.off("offer");
             socket.off("answer");
@@ -117,72 +161,60 @@ const VideoRoom = () => {
             socket.off("user-left");
             socket.off("user-toggled-audio");
             socket.off("user-toggled-video");
-            // Clean up stream and peers
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
+
+            Object.values(peerConnections.current).forEach(pc => pc.close());
+            peerConnections.current = {};
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
             }
-            peersRef.current.forEach(p => p.peer.destroy());
         };
     }, [roomId, user._id]);
 
-    function createPeer(userToSignal, callerID, stream) {
-        const peer = new SimplePeer({
-            initiator: true,
-            trickle: false,
-            stream,
+    const createPeerConnection = (remoteSocketId, stream) => {
+        const pc = new RTCPeerConnection({
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+            ],
         });
 
-        peer.on("signal", (signal) => {
-            if (signal.type === 'offer') {
-                socket.emit("offer", {
-                    offer: signal,
-                    to: userToSignal,
-                    from: callerID,
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit("ice-candidate", {
                     roomId,
-                    name: user.name,
-                    avatar: user.avatar
+                    candidate: event.candidate,
+                    from: socket.id,
+                    to: remoteSocketId,
                 });
-            } else if (signal.candidate) {
-                socket.emit("ice-candidate", { candidate: signal, to: userToSignal, from: callerID, roomId });
             }
-        });
+        };
 
-        return peer;
-    }
+        pc.ontrack = (event) => {
+            console.log("Received remote track from:", remoteSocketId);
+            setPeers(prev => ({
+                ...prev,
+                [remoteSocketId]: { ...prev[remoteSocketId], stream: event.streams[0] }
+            }));
+        };
 
-    function addPeer(incomingSignal, callerID, stream) {
-        const peer = new SimplePeer({
-            initiator: false,
-            trickle: false,
-            stream,
-        });
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-        peer.on("signal", (signal) => {
-            if (signal.type === 'answer') {
-                socket.emit("answer", { answer: signal, to: callerID, from: socket.id, roomId });
-            } else if (signal.candidate) {
-                socket.emit("ice-candidate", { candidate: signal, to: callerID, from: socket.id, roomId });
-            }
-        });
-
-        peer.signal(incomingSignal);
-
-        return peer;
-    }
+        return pc;
+    };
 
     const toggleAudio = () => {
-        if (stream) {
-            const enabled = !stream.getAudioTracks()[0].enabled;
-            stream.getAudioTracks()[0].enabled = enabled;
+        if (localStream) {
+            const enabled = !localStream.getAudioTracks()[0].enabled;
+            localStream.getAudioTracks()[0].enabled = enabled;
             setIsAudioMuted(!enabled);
             socket.emit("toggle-audio", { roomId, isMuted: !enabled });
         }
     };
 
     const toggleVideo = () => {
-        if (stream) {
-            const enabled = !stream.getVideoTracks()[0].enabled;
-            stream.getVideoTracks()[0].enabled = enabled;
+        if (localStream) {
+            const enabled = !localStream.getVideoTracks()[0].enabled;
+            localStream.getVideoTracks()[0].enabled = enabled;
             setIsVideoMuted(!enabled);
             socket.emit("toggle-video", { roomId, isVideoMuted: !enabled });
         }
@@ -200,7 +232,7 @@ const VideoRoom = () => {
                     {!isVideoMuted ? (
                         <video
                             muted
-                            ref={userVideo}
+                            ref={localVideoRef}
                             autoPlay
                             playsInline
                             className="w-full h-full object-cover transform scale-x-[-1]"
@@ -236,8 +268,8 @@ const VideoRoom = () => {
                 </div>
 
                 {/* Remote Videos */}
-                {peers.map((peerObj) => (
-                    <VideoPlayer key={peerObj.peerID} peerObj={peerObj} />
+                {Object.entries(peers).map(([id, peerObj]) => (
+                    <VideoPlayer key={id} peerObj={peerObj} />
                 ))}
             </div>
         </div>
@@ -246,19 +278,17 @@ const VideoRoom = () => {
 
 const VideoPlayer = ({ peerObj }) => {
     const ref = useRef();
-    const { peer, name, avatar, isVideoMuted, isAudioMuted } = peerObj;
+    const { stream, name, avatar, isVideoMuted, isAudioMuted } = peerObj;
 
     useEffect(() => {
-        peer.on("stream", (stream) => {
-            if (ref.current) {
-                ref.current.srcObject = stream;
-            }
-        });
-    }, [peer]);
+        if (ref.current && stream) {
+            ref.current.srcObject = stream;
+        }
+    }, [stream]);
 
     return (
         <div className="relative bg-black rounded-lg overflow-hidden aspect-video shadow-lg border border-gray-700">
-            {!isVideoMuted ? (
+            {!isVideoMuted && stream ? (
                 <video
                     playsInline
                     autoPlay
@@ -272,12 +302,12 @@ const VideoPlayer = ({ peerObj }) => {
                     ) : (
                         <User size={64} className="mb-2" />
                     )}
-                    <p className="font-semibold">{name}</p>
+                    <p className="font-semibold">{name || "Connecting..."}</p>
                 </div>
             )}
 
             <div className="absolute bottom-2 left-2 bg-black/50 px-2 py-1 rounded text-white text-sm">
-                {name}
+                {name || "User"}
             </div>
 
             {isAudioMuted && (
