@@ -1,6 +1,6 @@
 import { useDispatch, useSelector } from "react-redux";
 import { Mail, UserRound, LogOut } from "lucide-react";
-import { logoutUser } from "../Redux/slices/authSlice";
+import { logoutUser } from "../redux/slices/authSlice.js";
 import axios from "axios";
 
 const Profile = () => {
