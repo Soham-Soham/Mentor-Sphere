@@ -22,10 +22,7 @@ const sendVerificationEmail = async (email, token) => {
     console.log("Email::sendVerificationEmail: Email Sent Successfully");
     return true;
   } catch (error) {
-    console.log(
-      "Email::sendVerificationEmail: Error while sending verification mail"
-    );
-    // throw new Error("Email::sendVerificationEmail: Error :",error)
+    console.log("Email::sendVerificationEmail: Error while sending verification mail", error);
     return false;
   }
 };
