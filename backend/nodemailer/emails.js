@@ -1,38 +1,114 @@
-import { transporter } from "./email.config.js";
+// import { transporter } from "./email.config.js";
+// import {
+//   RESET_PASSWORD_EMAIL_TEMPLATE,
+//   SUCCESS_RESETPASSWORD_EMAIL_TEMPLATE,
+//   VERIFICATION_EMAIL_TEMPLATE,
+// } from "./emailTemplates.js";
+
+// const sendVerificationEmail = async (email, token) => {
+//   const verificationLink = `${process.env.CORS_ORIGIN}/email-verification/${token}`;
+//   console.log(verificationLink);
+  
+//   try {
+//     const response = await transporter.sendMail({
+//       from: process.env.EMAIL_USER,
+//       to: email,
+//       subject: "Test Email",
+//       html: VERIFICATION_EMAIL_TEMPLATE.replace(
+//         "{verificationLink}",
+//         verificationLink
+//       ),
+//     });
+
+//     console.log("Email::sendVerificationEmail: Email Sent Successfully");
+//     return true;
+//   } catch (error) {
+//     console.log("Email::sendVerificationEmail: Error while sending verification mail", error);
+//     return false;
+//   }
+// };
+
+// const sendRestPasswordEmail = async (email, token) => {
+//   const resetPasswordLink = `${process.env.CORS_ORIGIN}/reset-password/${token}`;
+//   try {
+//     const response = await transporter.sendMail({
+//       from: process.env.EMAIL_USER,
+//       to: email,
+//       subject: "Reset Password",
+//       html: RESET_PASSWORD_EMAIL_TEMPLATE.replace(
+//         "{reset_link}",
+//         resetPasswordLink
+//       ),
+//     });
+
+//     console.log("sendRestPasswordEmail:: Email Sent Successfully");
+//     return true;
+//   } catch (error) {
+//     console.log("sendRestPasswordEmail:: Error: ", error);
+//     return false;
+//   }
+// };
+
+// const sendSuccessResetPasswordEmail = async (email) => {
+//   try {
+//     const response = await transporter.sendMail({
+//       from: process.env.EMAIL_USER,
+//       to: email,
+//       subject: "SuccessFully Password Reset",
+//       html: SUCCESS_RESETPASSWORD_EMAIL_TEMPLATE,
+//     });
+
+//     console.log("sendSuccessResetPasswordEmail:: Email Sent Successfully");
+//     return true;
+//   } catch (error) {
+//     console.log("sendSuccessResetPasswordEmail:: Error: ", error);
+//     return false;
+//   }
+// };
+
+// export { sendVerificationEmail, sendRestPasswordEmail, sendSuccessResetPasswordEmail };
+
+
+import { resend } from "../resend/resend.config.js";
+
 import {
   RESET_PASSWORD_EMAIL_TEMPLATE,
   SUCCESS_RESETPASSWORD_EMAIL_TEMPLATE,
   VERIFICATION_EMAIL_TEMPLATE,
 } from "./emailTemplates.js";
 
+const FROM_EMAIL = "mentorSphere <noreply@resend.dev>";  
+// You can change to your domain later when you add a custom domain.
+
 const sendVerificationEmail = async (email, token) => {
   const verificationLink = `${process.env.CORS_ORIGIN}/email-verification/${token}`;
-  console.log(verificationLink);
   
   try {
-    const response = await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    const response = await resend.emails.send({
+      from: FROM_EMAIL,
       to: email,
-      subject: "Test Email",
+      subject: "Verify Your Email",
       html: VERIFICATION_EMAIL_TEMPLATE.replace(
         "{verificationLink}",
         verificationLink
       ),
     });
 
-    console.log("Email::sendVerificationEmail: Email Sent Successfully");
+    console.log("Email sent:", response);
     return true;
+
   } catch (error) {
-    console.log("Email::sendVerificationEmail: Error while sending verification mail", error);
+    console.log("Email::sendVerificationEmail Error:", error);
     return false;
   }
 };
 
 const sendRestPasswordEmail = async (email, token) => {
   const resetPasswordLink = `${process.env.CORS_ORIGIN}/reset-password/${token}`;
+
   try {
-    const response = await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    const response = await resend.emails.send({
+      from: FROM_EMAIL,
       to: email,
       subject: "Reset Password",
       html: RESET_PASSWORD_EMAIL_TEMPLATE.replace(
@@ -41,29 +117,35 @@ const sendRestPasswordEmail = async (email, token) => {
       ),
     });
 
-    console.log("sendRestPasswordEmail:: Email Sent Successfully");
+    console.log("Reset password email sent:", response);
     return true;
+
   } catch (error) {
-    console.log("sendRestPasswordEmail:: Error: ", error);
+    console.log("sendRestPasswordEmail Error:", error);
     return false;
   }
 };
 
 const sendSuccessResetPasswordEmail = async (email) => {
   try {
-    const response = await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    const response = await resend.emails.send({
+      from: FROM_EMAIL,
       to: email,
-      subject: "SuccessFully Password Reset",
+      subject: "Password Reset Successful",
       html: SUCCESS_RESETPASSWORD_EMAIL_TEMPLATE,
     });
 
-    console.log("sendSuccessResetPasswordEmail:: Email Sent Successfully");
+    console.log("Success reset email sent:", response);
     return true;
+
   } catch (error) {
-    console.log("sendSuccessResetPasswordEmail:: Error: ", error);
+    console.log("sendSuccessResetPasswordEmail Error:", error);
     return false;
   }
 };
 
-export { sendVerificationEmail, sendRestPasswordEmail, sendSuccessResetPasswordEmail };
+export {
+  sendVerificationEmail,
+  sendRestPasswordEmail,
+  sendSuccessResetPasswordEmail,
+};
