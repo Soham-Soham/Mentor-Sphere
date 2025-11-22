@@ -68,6 +68,9 @@ const CodeHistory = () => {
         return <div className="p-4 text-center text-red-500">{error}</div>;
     }
 
+    console.log("history",history);
+    
+
     return (
         <div className="p-4 max-w-4xl mx-auto">
             <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
@@ -86,10 +89,11 @@ const CodeHistory = () => {
                             <div className="flex justify-between items-start">
                                 <div>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                                        Saved on: {new Date(item.timestamp).toLocaleString()}
+                                        Saved on: {new Date(item.createdAt).toLocaleString()}
                                     </p>
-                                    <div className="mt-2 bg-gray-100 dark:bg-slate-900 p-2 rounded text-xs font-mono overflow-x-auto max-h-32">
+                                    <div className="mt-2 bg-gray-100 dark:bg-slate-900 p-2 rounded text-xs text-white font-mono overflow-x-auto max-h-32">
                                         <pre>{item.code.substring(0, 200)}...</pre>
+                                        
                                     </div>
                                 </div>
 

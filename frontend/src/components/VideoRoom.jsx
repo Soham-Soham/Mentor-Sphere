@@ -3,13 +3,6 @@ import socket from "../socket/socket"; // your socket.io-client instance
 import { Video, Mic, MicOff, VideoOff, User } from "lucide-react";
 import { useSelector } from "react-redux";
 
-/**
- * VideoRoom.jsx
- * - Multi-peer WebRTC (mesh) using socket.io signaling
- * - Adds tracks before offer/answer
- * - Uses onnegotiationneeded
- * - Uses a TURN server config (set TURN env)
- */
 
 const TURN_CONFIG = [
     { urls: "stun:stun.l.google.com:19302" }
@@ -154,6 +147,31 @@ const VideoRoom = () => {
         socket.on("user-left", handleUserLeft);
         socket.on("user-toggled-audio", handleToggleAudio);
         socket.on("user-toggled-video", handleToggleVideo);
+
+        socket.on("existing-users", (users) => {
+            console.log("Existing users:", users);
+
+            users.forEach((socketId) => {
+                const pc = createPeerConnection(socketId);
+                peerConnections.current[socketId] = pc;
+
+                if (localStream) addLocalTracksToPc(pc, localStream);
+
+                pc.createOffer()
+                    .then((offer) => {
+                        pc.setLocalDescription(offer);
+                        socket.emit("offer", {
+                            roomId,
+                            offer,
+                            from: socket.id,
+                            to: socketId,
+                            name: user.name,
+                            avatar: user.avatar
+                        });
+                    });
+            });
+        });
+
 
 
         // Get User Media THEN join

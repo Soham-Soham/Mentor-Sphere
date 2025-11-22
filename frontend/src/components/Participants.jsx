@@ -85,7 +85,7 @@ const Participants = () => {
           {participants.map((participant) => (
             <div
               key={participant?._id}
-              className={` flex justify-between items-center gap-4 ${participant?.role == "owner" ? "bg-green-700" : "bg-sky-900"
+              className={` flex justify-between items-center gap-4 ${participant?.role == "owner" ? "bg-green-700" : "bg-sky-900 text-white"
                 }  p-2 rounded-md `}
             >
               <img
@@ -122,7 +122,7 @@ const Participants = () => {
       <div className=" flex flex-col gap-2 h-full">
         {roomDetails && participants ? (
           <button
-            className=" bg-red-500 hover:bg-red-600 px-4 py-2 rounded text-white"
+            className=" bg-red-500 hover:bg-red-600 px-4 py-2 mt-5 rounded text-white"
             onClick={leaveRoomHandle}
           >
             Leave Room

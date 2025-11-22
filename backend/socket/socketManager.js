@@ -31,7 +31,23 @@ export const socketManager = (io) => {
 
     socket.on("join-video-room", ({ roomId, userId, name, avatar }) => {
       socket.join(roomId);
+
       console.log(`User ${socket.id} joined video room ${roomId}`);
+
+      // 1️⃣ Get existing users in room
+      const clients = io.sockets.adapter.rooms.get(roomId) || new Set();
+      const existingUsers = [];
+
+      clients.forEach((clientId) => {
+        if (clientId !== socket.id) {
+          existingUsers.push(clientId);
+        }
+      });
+
+      // 2️⃣ Send existing users to newly joined client
+      socket.emit("existing-users", existingUsers);
+
+      // 3️⃣ Notify others about the new user
       socket.to(roomId).emit("user-joined", {
         userId,
         socketId: socket.id,
@@ -39,6 +55,7 @@ export const socketManager = (io) => {
         avatar
       });
     });
+
 
 
     // Handle offer
